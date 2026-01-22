@@ -112,6 +112,85 @@ def flood_fill(x, y, target, replacement):
                     (px,py+1),(px,py-1)
                 ])
 
+
+#=============================
+#INTRO
+#==============================
+def intro_logo():
+    # Carrega e toca a música da INTRO
+    pygame.mixer.music.load("Sounds/capcom.mp3") 
+    pygame.mixer.music.set_volume(0.5)
+    pygame.mixer.music.play(-1) 
+
+    start = pygame.time.get_ticks()
+
+    while True:
+        clock.tick(60)
+        screen.fill(BLACK)
+        draw_logo()
+        pygame.display.flip()
+
+        # Verifica se o tempo acabou (6 segundos)
+        if pygame.time.get_ticks() - start > 6000:
+            # ANTES DE SAIR: Carrega a música principal do JOGO
+            pygame.mixer.music.load("Sounds/The_Astronaut.mp3")
+            pygame.mixer.music.play(-1)
+            return
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+def draw_logo():
+    cx, cy = WIDTH // 2, HEIGHT // 2
+    raio_circulo = 140
+    
+    # 1. Desenha o círculo de contorno
+    draw_circle(cx, cy, raio_circulo, WHITE)
+
+    # 2. Lógica de tempo para animação da nave
+    tempo_atual = pygame.time.get_ticks()
+    
+    # Faz a nave aparecer após 1 segundo
+    if tempo_atual > 1000:
+        # Podemos adicionar um pequeno movimento de subida na intro
+        offset_y = math.sin(tempo_atual * 0.005) * 5 
+        draw_spaceship_bold(cx, cy + offset_y)
+
+def draw_spaceship_bold(cx, cy):
+    # Cores
+    COR_CORPO = WHITE
+    COR_DETALHE = GRAY
+    COR_FOGO = YELLOW
+
+    # --- Corpo Principal (Triângulo central gordo) ---
+    # Pontos: Topo, Inferior Direito, Inferior Esquerdo
+    corpo_pts = [
+        (cx, cy - 60),          # Ponta (Nariz)
+        (cx + 35, cy + 40),     # Base Direita
+        (cx - 35, cy + 40)      # Base Esquerda
+    ]
+    pygame.draw.polygon(screen, COR_CORPO, corpo_pts)
+
+    # --- Asas Laterais ---
+    # Asa Esquerda
+    asa_esq = [(cx - 35, cy), (cx - 70, cy + 40), (cx - 35, cy + 40)]
+    pygame.draw.polygon(screen, COR_CORPO, asa_esq)
+    
+    # Asa Direita
+    asa_dir = [(cx + 35, cy), (cx + 70, cy + 40), (cx + 35, cy + 40)]
+    pygame.draw.polygon(screen, COR_CORPO, asa_dir)
+
+    # --- Janela/Cockpit (Retângulo ou Elipse) ---
+    pygame.draw.rect(screen, BLACK, (cx - 10, cy - 20, 20, 30), border_radius=5)
+
+    # --- Motores / Fogo (Aparece e some para dar efeito de brilho) ---
+    if (pygame.time.get_ticks() // 100) % 2 == 0:
+        fogo_pts = [(cx - 15, cy + 40), (cx, cy + 70), (cx + 15, cy + 40)]
+        pygame.draw.polygon(screen, COR_FOGO, fogo_pts)
+
+    # --- Contornos para dar definição (Opcional) ---
+    pygame.draw.polygon(screen, BLACK, corpo_pts, 2)
 # =========================
 # ROTAÇÃO (TRANSFORMAÇÃO GEOMÉTRICA)
 # =========================
@@ -293,6 +372,9 @@ def menu():
                 pygame.quit()
                 sys.exit()
         pygame.display.flip()
+
+
+intro_logo()
 instructions()
 menu()
 
