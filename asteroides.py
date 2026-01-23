@@ -145,52 +145,51 @@ def draw_logo():
     cx, cy = WIDTH // 2, HEIGHT // 2
     raio_circulo = 140
     
-    # 1. Desenha o círculo de contorno
+    # 1. Desenha apenas o contorno do círculo (NÃO use flood_fill no círculo)
     draw_circle(cx, cy, raio_circulo, WHITE)
 
-    # 2. Lógica de tempo para animação da nave
     tempo_atual = pygame.time.get_ticks()
     
-    # Faz a nave aparecer após 1 segundo
+    # A nave aparece após 1 segundo
     if tempo_atual > 1000:
-        # Podemos adicionar um pequeno movimento de subida na intro
-        offset_y = math.sin(tempo_atual * 0.005) * 5 
-        draw_spaceship_bold(cx, cy + offset_y)
+        # Pequena flutuação
+        offset_y = int(math.sin(tempo_atual * 0.005) * 7)
+        desenhar_nave_detalhada(cx, cy + offset_y)
 
-def draw_spaceship_bold(cx, cy):
-    # Cores
-    COR_CORPO = WHITE
-    COR_DETALHE = GRAY
-    COR_FOGO = YELLOW
+def desenhar_nave_detalhada(cx, cy):
+    # Cores para facilitar
+    # Se o flood_fill estiver dando erro, desenhe apenas as linhas primeiro
+    
+    # --- CORPO CENTRAL (Trapézio/Triângulo) ---
+    draw_line(cx, cy - 50, cx + 20, cy + 30, WHITE)   # Lado direito
+    draw_line(cx, cy - 50, cx - 20, cy + 30, WHITE)   # Lado esquerdo
+    draw_line(cx - 20, cy + 30, cx + 20, cy + 30, WHITE) # Base do corpo
 
-    # --- Corpo Principal (Triângulo central gordo) ---
-    # Pontos: Topo, Inferior Direito, Inferior Esquerdo
-    corpo_pts = [
-        (cx, cy - 60),          # Ponta (Nariz)
-        (cx + 35, cy + 40),     # Base Direita
-        (cx - 35, cy + 40)      # Base Esquerda
-    ]
-    pygame.draw.polygon(screen, COR_CORPO, corpo_pts)
-
-    # --- Asas Laterais ---
+    # --- ASAS ---
     # Asa Esquerda
-    asa_esq = [(cx - 35, cy), (cx - 70, cy + 40), (cx - 35, cy + 40)]
-    pygame.draw.polygon(screen, COR_CORPO, asa_esq)
+    draw_line(cx - 20, cy, cx - 50, cy + 40, WHITE)
+    draw_line(cx - 50, cy + 40, cx - 20, cy + 30, WHITE)
     
     # Asa Direita
-    asa_dir = [(cx + 35, cy), (cx + 70, cy + 40), (cx + 35, cy + 40)]
-    pygame.draw.polygon(screen, COR_CORPO, asa_dir)
+    draw_line(cx + 20, cy, cx + 50, cy + 40, WHITE)
+    draw_line(cx + 50, cy + 40, cx + 20, cy + 30, WHITE)
 
-    # --- Janela/Cockpit (Retângulo ou Elipse) ---
-    pygame.draw.rect(screen, BLACK, (cx - 10, cy - 20, 20, 30), border_radius=5)
+    # --- COCKPIT (Cabine central) ---
+    draw_line(cx - 8, cy - 10, cx + 8, cy - 10, WHITE)
+    draw_line(cx - 8, cy + 10, cx + 8, cy + 10, WHITE)
+    draw_line(cx - 8, cy - 10, cx - 8, cy + 10, WHITE)
+    draw_line(cx + 8, cy - 10, cx + 8, cy + 10, WHITE)
 
-    # --- Motores / Fogo (Aparece e some para dar efeito de brilho) ---
-    if (pygame.time.get_ticks() // 100) % 2 == 0:
-        fogo_pts = [(cx - 15, cy + 40), (cx, cy + 70), (cx + 15, cy + 40)]
-        pygame.draw.polygon(screen, COR_FOGO, fogo_pts)
+    # --- FOGO DO MOTOR (Vermelho/Amarelo) ---
+    if (pygame.time.get_ticks() // 200) % 2 == 0:
+        draw_line(cx - 10, cy + 30, cx, cy + 60, RED)
+        draw_line(cx + 10, cy + 30, cx, cy + 60, RED)
 
-    # --- Contornos para dar definição (Opcional) ---
-    pygame.draw.polygon(screen, BLACK, corpo_pts, 2)
+    # --- PREENCHIMENTO OPCIONAL ---
+    # Só use se o desenho estiver 100% fechado. 
+    # Tente comentar essas linhas se o círculo continuar ficando todo branco.
+    # flood_fill(cx, cy + 20, BLACK, GRAY)    # Interior da nave
+    # flood_fill(cx, cy, BLACK, BLUE)         # Interior da cabine
 # =========================
 # ROTAÇÃO (TRANSFORMAÇÃO GEOMÉTRICA)
 # =========================
