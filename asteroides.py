@@ -112,10 +112,72 @@ def flood_fill(x, y, target, replacement):
                     (px,py+1),(px,py-1)
                 ])
 
+# ============================
+# BOUNDARY FILL
+# ============================
+def boundary_fill(x, y, fill_color, boundary_color):
+    # Usamos uma pilha (stack) para evitar erro de recursão do Python
+    stack = [(x, y)]
+    
+    while stack:
+        px, py = stack.pop()
+        
+        if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+            current_color = screen.get_at((px, py))[:3]
+            
+            # Se a cor atual não é a fronteira E ainda não é a cor de preenchimento
+            if current_color != boundary_color and current_color != fill_color:
+                set_pixel(px, py, fill_color)
+                
+                # Adiciona vizinhos (4-conectado)
+                stack.append((px + 1, py))
+                stack.append((px - 1, py))
+                stack.append((px, py + 1))
+                stack.append((px, py - 1))
 
-#=============================
+
+# ============================
+# SCANLINE
+# ============================
+def scanline_fill(points, fill_color):
+    if len(points) < 3: return
+
+    # 1. Encontrar limites verticais
+    ys = [p[1] for p in points]
+    min_y, max_y = int(min(ys)), int(max(ys))
+
+    # 2. Iterar por cada linha horizontal
+    for y in range(min_y, max_y + 1):
+        intersections = []
+        for i in range(len(points)):
+            p1 = points[i]
+            p2 = points[(i + 1) % len(points)]
+            
+            # Verifica se a scanline intercepta a aresta
+            if (p1[1] <= y < p2[1]) or (p2[1] <= y < p1[1]):
+                # Cálculo de X da interseção (Interpolação)
+                x = p1[0] + (y - p1[1]) * (p2[0] - p1[0]) / (p2[1] - p1[1])
+                intersections.append(int(x))
+        
+        # 3. ORDENAR as interseções 
+        intersections.sort()
+        
+        # 4. Preencher entre os pares (A-B, C-D...)
+        for i in range(0, len(intersections), 2):
+            if i + 1 < len(intersections):
+                x_start = intersections[i]
+                x_end = intersections[i+1]
+                
+                # LAÇO DE TEXTURA: Em vez de draw_line, pintamos pixel a pixel
+                for x in range(x_start, x_end + 1):
+
+                    if (x // 1 + y // 1) % 2 == 0:
+                        set_pixel(x, y, (0, 0, 255))    
+                    else:
+                        set_pixel(x, y, (0, 0, 180))
+# =============================
 #INTRO
-#==============================
+# ==============================
 def intro_logo():
     # Carrega e toca a música da INTRO
     pygame.mixer.music.load("Sounds/capcom.mp3") 
@@ -260,15 +322,19 @@ ship_model = [(-10,10),(0,-15),(10,10)]
 def draw_ship():
     points = []
     for p in ship_model:
+        # Rotaciona e move para a posição da nave
         rp = rotate(p, ship_angle)
-        points.append((ship_pos[0]+rp[0], ship_pos[1]+rp[1]))
+        points.append((ship_pos[0] + rp[0], ship_pos[1] + rp[1]))
 
-    for i in range(3):
-        draw_line(points[i][0], points[i][1],
-                  points[(i+1)%3][0], points[(i+1)%3][1],
-                  BLUE)
-    flood_fill(ship_pos[0], ship_pos[1], BLACK, BLUE)
+    # O scanline agora verá 4 interseções em algumas linhas y e 2 em outras
+    # Isso fará o desenho "aberto" em cima
+    scanline_fill(points, BLUE)
 
+    # Contorno branco para destacar
+    for i in range(len(points)):
+        p1 = points[i]
+        p2 = points[(i + 1) % len(points)]
+        draw_line(p1[0], p1[1], p2[0], p2[1], WHITE)
 # =========================
 # TIROS
 # =========================
