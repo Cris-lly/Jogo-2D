@@ -94,7 +94,45 @@ def draw_circle(cx, cy, r, color):
             d += 2*(x-y) + 5
             y -= 1
         x += 1
+# =========================
+#ELIPSE
+def draw_ellipse(cx, cy, rx, ry, color):
+    x, y = 0, ry
+    d1 = (ry**2) - (rx**2 * ry) + (0.25 * rx**2)
+    dx = 2 * ry**2 * x
+    dy = 2 * rx**2 * y
 
+    # Região 1
+    while dx < dy:
+        for dx_sym, dy_sym in [(x, y), (-x, y), (x, -y), (-x, -y)]:
+            set_pixel(cx + dx_sym, cy + dy_sym, color)
+        if d1 < 0:
+            x += 1
+            dx += 2 * ry**2
+            d1 += dx + ry**2
+        else:
+            x += 1
+            y -= 1
+            dx += 2 * ry**2
+            dy -= 2 * rx**2
+            d1 += dx - dy + ry**2
+
+    # Região 2
+    d2 = ((ry**2) * ((x + 0.5)**2)) + ((rx**2) * ((y - 1)**2)) - (rx**2 * ry**2)
+    while y >= 0:
+        for dx_sym, dy_sym in [(x, y), (-x, y), (x, -y), (-x, -y)]:
+            set_pixel(cx + dx_sym, cy + dy_sym, color)
+        if d2 > 0:
+            y -= 1
+            dy -= 2 * rx**2
+            d2 += rx**2 - dy
+        else:
+            y -= 1
+            x += 1
+            dx += 2 * ry**2
+            dy -= 2 * rx**2
+            d2 += dx - dy + rx**2
+# =========================
 # =========================
 # FLOOD FILL
 # =========================
@@ -205,11 +243,11 @@ def intro_logo():
                 sys.exit()
 def draw_logo():
     cx, cy = WIDTH // 2, HEIGHT // 2
-    raio_circulo = 140
+    rx = 180 
+    ry = 100
     
     # 1. Desenha apenas o contorno do círculo (NÃO use flood_fill no círculo)
-    draw_circle(cx, cy, raio_circulo, WHITE)
-
+    draw_ellipse(cx, cy, rx, ry, WHITE)
     tempo_atual = pygame.time.get_ticks()
     
     # A nave aparece após 1 segundo
