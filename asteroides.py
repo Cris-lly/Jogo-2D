@@ -373,6 +373,100 @@ def draw_ship():
         p1 = points[i]
         p2 = points[(i + 1) % len(points)]
         draw_line(p1[0], p1[1], p2[0], p2[1], WHITE)
+
+ZOOM_VIEWPORT = pygame.Rect(480, 360, 120, 80)
+INSIDE, LEFT, RIGHT, BOTTOM, TOP = 0, 1, 2, 4, 8 # definicao da região
+def get_outcode(x, y, rect):
+    code = INSIDE
+    if x < rect.left:   code |= LEFT
+    elif x > rect.right:  code |= RIGHT
+    if y < rect.top:    code |= TOP
+    elif y > rect.bottom: code |= BOTTOM
+    return code
+
+def draw_line_clipped(x0, y0, x1, y1, rect, color):
+    outcode0 = get_outcode(x0, y0, rect)
+    outcode1 = get_outcode(x1, y1, rect)
+    
+    while True:
+        if not (outcode0 | outcode1): # Ambos dentro
+            draw_line(int(x0), int(y0), int(x1), int(y1), color)
+            break
+        elif outcode0 & outcode1: # Ambos fora (mesma região)
+            break
+        else:
+            # Precisa de recorte
+            outcode_out = outcode0 if outcode0 else outcode1
+            if outcode_out & TOP:
+                x = x0 + (x1 - x0) * (rect.top - y0) / (y1 - y0)
+                y = rect.top
+            elif outcode_out & BOTTOM:
+                x = x0 + (x1 - x0) * (rect.bottom - y0) / (y1 - y0)
+                y = rect.bottom
+            elif outcode_out & RIGHT:
+                y = y0 + (y1 - y0) * (rect.right - x0) / (x1 - x0)
+                x = rect.right
+            elif outcode_out & LEFT:
+                y = y0 + (y1 - y0) * (rect.left - x0) / (x1 - x0)
+                x = rect.left
+
+            if outcode_out == outcode0:
+                x0, y0, outcode0 = x, y, get_outcode(x, y, rect)
+            else:
+                x1, y1, outcode1 = x, y, get_outcode(x, y, rect)
+def draw_zoom_system():
+
+    # --- 1. LIMPEZA E OCLUSÃO ---
+    # Preenchemos o retângulo da viewport com PRETO para que nada 
+    # que venha "de baixo" (do jogo principal) apareça aqui dentro.
+    for x in range(ZOOM_VIEWPORT.left, ZOOM_VIEWPORT.right + 1):
+        for y in range(ZOOM_VIEWPORT.top, ZOOM_VIEWPORT.bottom + 1):
+            set_pixel(x, y, BLACK)
+
+    # --- 2. DESENHO DA MOLDURA ---
+    for x in range(ZOOM_VIEWPORT.left, ZOOM_VIEWPORT.right + 1):
+        set_pixel(x, ZOOM_VIEWPORT.top, GRAY)
+        set_pixel(x, ZOOM_VIEWPORT.bottom, GRAY)
+    for y in range(ZOOM_VIEWPORT.top, ZOOM_VIEWPORT.bottom + 1):
+        set_pixel(ZOOM_VIEWPORT.left, y, GRAY)
+        set_pixel(ZOOM_VIEWPORT.right, y, GRAY)
+
+    # --- 3. MAPEAMENTO JANELA-VIEWPORT ---
+    window_size = 60 
+    win_left = ship_pos[0] - window_size
+    win_right = ship_pos[0] + window_size
+    win_top = ship_pos[1] - window_size
+    win_bottom = ship_pos[1] + window_size
+
+    def map_coords(world_x, world_y):
+        zx = (world_x - win_left) / (win_right - win_left) * ZOOM_VIEWPORT.width + ZOOM_VIEWPORT.left
+        zy = (world_y - win_top) / (win_bottom - win_top) * ZOOM_VIEWPORT.height + ZOOM_VIEWPORT.top
+        return int(zx), int(zy)
+
+    # --- 4. TIROS NO ZOOM (COM CLIPPING) ---
+    for s in shots:
+        zx0, zy0 = map_coords(s["x"], s["y"])
+        zx1, zy1 = map_coords(s["x"], s["y"] - 8)
+        # Usamos o draw_line_clipped para o tiro não vazar da borda cinza
+        draw_line_clipped(zx0, zy0, zx1, zy1, ZOOM_VIEWPORT, YELLOW)
+
+    # --- 5. NAVE NO ZOOM (COM CLIPPING) ---
+    zx_center, zy_center = map_coords(ship_pos[0], ship_pos[1])
+    zoom_points = []
+    for p in ship_model:
+        rp = rotate(p, ship_angle)
+        px, py = map_coords(ship_pos[0] + rp[0], ship_pos[1] + rp[1])
+        zoom_points.append((px, py))
+    
+    for i in range(len(zoom_points)):
+        p1 = zoom_points[i]
+        p2 = zoom_points[(i + 1) % len(zoom_points)]
+        # A nave só aparece dentro do limite da ZOOM_VIEWPORT
+        draw_line_clipped(p1[0], p1[1], p2[0], p2[1], ZOOM_VIEWPORT, BLUE)
+    
+    # Preenchimento Boundary Fill (inicia no centro da nave)
+    if ZOOM_VIEWPORT.collidepoint(zx_center, zy_center):
+        boundary_fill(zx_center, zy_center, BLUE, BLUE)
 # =========================
 # TIROS
 # =========================
@@ -409,7 +503,51 @@ def hit_asteroid(s, a):
 
 def hit_ship(a):
     return math.hypot(a["x"]-ship_pos[0], a["y"]-ship_pos[1]) < a["r"] + 12
+# ===========================
+# PONTUAÇÃO
+score = 0
 
+def draw_score(current_score, x, y, size, color):
+    score_str = str(current_score)
+    offset = 0
+    for char in score_str:
+        draw_digit(int(char), x + offset, y, size, color)
+        offset += size + 10 # Espaço entre números
+
+def draw_digit(digit, x, y, size, color):
+    # Segmentos: 0=topo, 1=meio, 2=base, 3=esq_cima, 4=dir_cima, 5=esq_baixo, 6=dir_baixo
+    # Definimos as coordenadas relativas de cada segmento
+    seg = {
+        0: (0, 0, 1, 0),       # Topo
+        1: (0, 1, 1, 1),       # Meio
+        2: (0, 2, 1, 2),       # Base
+        3: (0, 0, 0, 1),       # Esq Cima
+        4: (1, 0, 1, 1),       # Dir Cima
+        5: (0, 1, 0, 2),       # Esq Baixo
+        6: (1, 1, 1, 2)        # Dir Baixo
+    }
+    
+    # Quais segmentos compõem cada número de 0 a 9
+    digits = {
+        0: [0, 2, 3, 4, 5, 6],
+        1: [4, 6],
+        2: [0, 1, 2, 4, 5],
+        3: [0, 1, 2, 4, 6],
+        4: [1, 3, 4, 6],
+        5: [0, 1, 2, 3, 6],
+        6: [0, 1, 2, 3, 5, 6],
+        7: [0, 4, 6],
+        8: [0, 1, 2, 3, 4, 5, 6],
+        9: [0, 1, 2, 3, 4, 6]
+    }
+
+    if digit in digits:
+        for s_index in digits[digit]:
+            x0_rel, y0_rel, x1_rel, y1_rel = seg[s_index]
+            # Multiplica pelo tamanho e desenha com Bresenham (draw_line)
+            draw_line(x + x0_rel * size, y + y0_rel * size, 
+                      x + x1_rel * size, y + y1_rel * size, color)
+# ==========================
 # =========================
 # FIM DE JOGO
 # =========================
@@ -526,6 +664,7 @@ while True:
             if hit_asteroid(s, a):
                 shots.remove(s)
                 asteroids.remove(a)
+                score += 10
                 break
 
     shots = [s for s in shots if s["y"] > VIEWPORT.top]
@@ -547,6 +686,7 @@ while True:
 
     for a in asteroids:
         draw_asteroid(a)
-
+    draw_zoom_system() # Zoom de 2.5 vezes
+    draw_score(score, 50, 10, 15, YELLOW)
     pygame.display.flip()
 
