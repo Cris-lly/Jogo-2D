@@ -32,10 +32,14 @@ pygame.mixer.music.play(-1)             # loop infinito
 # Textos
 # =========================
 def draw_text(text, font, color, x, y, center=True):
+    # coloca o texto na superfície e deixa o conjunto de pixel que forma a letra mais "liso", pra dá efeito de continuidade
     surface = font.render(text, True, color)
+    # Cria um retângulo delimitador (bounding box) da surpefície criada
     rect = surface.get_rect()
+    #centraliza na posição dada
     if center:
         rect.center = (x, y)
+    #se não for centralizado, posiciona na forma padrão de UI, superior esquerdo
     else:
         rect.topleft = (x, y)
     screen.blit(surface, rect)
@@ -54,22 +58,34 @@ YELLOW = (255,255,0)
 # SET PIXEL
 # =========================
 def set_pixel(x, y, color):
+    # verifica se as coordenadas passadas são válidas, se forem, pinta o pixel na tela de acordo com a coordenada dada
     if 0 <= x < WIDTH and 0 <= y < HEIGHT:
         screen.set_at((x, y), color)
 
-# =========================
+
+# ===================================================
+# Primitivas de Rasterização(linha, círculo e elipse)
+# ===================================================
+
 # LINHA - BRESENHAM
-# =========================
+
 def draw_line(x0, y0, x1, y1, color):
+    # calcula a distância horizontal e vertical("tamanho"), a relação dy/dx define o comportamento da linha(inclinação)
     dx = abs(x1-x0)
     dy = abs(y1-y0)
+
+    # define o sentido(direita esquerda, cima baixo)
     sx = 1 if x0 < x1 else -1
     sy = 1 if y0 < y1 else -1
+    #mede se é para descer ou subir(saldo inicial)
     err = dx - dy
+
     while True:
         set_pixel(x0, y0, color)
+        #verificando se não se mexeu, é só um pixel porque as coordenadas são iguais
         if x0 == x1 and y0 == y1:
             break
+        # verificando se anda(desenha) em x ou y
         e2 = err * 2
         if e2 > -dy:
             err -= dy
@@ -78,32 +94,40 @@ def draw_line(x0, y0, x1, y1, color):
             err += dx
             y0 += sy
 
-# =========================
+
 # CÍRCULO
-# =========================
+
 def draw_circle(cx, cy, r, color):
+    #inicializa os valores no topo do círculo para facilitar a simetria
     x, y = 0, r
+    # parâmetro de decisão que indica se o próximo pixel escolhido estará dentro ou fora da circunferência ideal.
     d = 1 - r
     while x <= y:
+        # A partir de um único ponto (x, y), o algoritmo desenha 8 pontos equivalentes ao redor do centro (cx, cy) - por causa da simetria
         for dx, dy in [(x,y),(y,x),(-x,y),(-y,x),
                        (x,-y),(y,-x),(-x,-y),(-y,-x)]:
             set_pixel(cx+dx, cy+dy, color)
+        #verificando se ainda tá dentro da circunferencia, caso esteja, avança em x
         if d < 0:
             d += 2*x + 3
+        # se não tiver, precisa descer pixel em y
         else:
             d += 2*(x-y) + 5
             y -= 1
         x += 1
-# =========================
+
 #ELIPSE
 def draw_ellipse(cx, cy, rx, ry, color):
+    #inicializa na parte superior
     x, y = 0, ry
+    # parametro de decisão da região 1 - verifica se tá dentro ou fora da elipse
     d1 = (ry**2) - (rx**2 * ry) + (0.25 * rx**2)
     dx = 2 * ry**2 * x
     dy = 2 * rx**2 * y
-
-    # Região 1
+    # existe 2 regiões porque a elipse não cresce de maneira uniforme
+    # Região 1 - O avanço principal é em X
     while dx < dy:
+        #simetria da elipse - ela cresce em 4 quadrantes, ou seja, um único cálculo gera 4 pixels
         for dx_sym, dy_sym in [(x, y), (-x, y), (x, -y), (-x, -y)]:
             set_pixel(cx + dx_sym, cy + dy_sym, color)
         if d1 < 0:
@@ -117,9 +141,10 @@ def draw_ellipse(cx, cy, rx, ry, color):
             dy -= 2 * rx**2
             d1 += dx - dy + ry**2
 
-    # Região 2
+    # Região 2 - O avanço principal é em y
     d2 = ((ry**2) * ((x + 0.5)**2)) + ((rx**2) * ((y - 1)**2)) - (rx**2 * ry**2)
     while y >= 0:
+        #simetria da elipse - ela cresce em 4 quadrantes, ou seja, um único cálculo gera 4 pixels
         for dx_sym, dy_sym in [(x, y), (-x, y), (x, -y), (-x, -y)]:
             set_pixel(cx + dx_sym, cy + dy_sym, color)
         if d2 > 0:
@@ -132,27 +157,36 @@ def draw_ellipse(cx, cy, rx, ry, color):
             dx += 2 * ry**2
             dy -= 2 * rx**2
             d2 += dx - dy + rx**2
-# =========================
-# =========================
-# FLOOD FILL
-# =========================
+
+
+# ==============================================================
+# Preenchimento de Regiões (Flood Fill/Boundary Fill e Scanline)
+# ==============================================================
+
+# FLOOD FILL - preenchimento de área
+
 def flood_fill(x, y, target, replacement):
+    # Se a cor de destino já for igual à nova cor, não há o que preencher.
     if target == replacement:
         return
+    # A pilha armazena os pixels que ainda precisam ser processados
     stack = [(x,y)]
     while stack:
+        #retirada de um pixel da pilha
         px, py = stack.pop()
         if 0 <= px < WIDTH and 0 <= py < HEIGHT:
+            #Verifica se o pixel pertence à região a ser preenchida.
             if screen.get_at((px,py))[:3] == target:
                 set_pixel(px,py,replacement)
+                #adiciona os 4 vizinhos na pilha
                 stack.extend([
                     (px+1,py),(px-1,py),
                     (px,py+1),(px,py-1)
                 ])
 
-# ============================
-# BOUNDARY FILL
-# ============================
+
+# BOUNDARY FILL - Muito usado quando: a região tem contorno bem definido e o interior pode ter cores variadas
+
 def boundary_fill(x, y, fill_color, boundary_color):
     # Usamos uma pilha (stack) para evitar erro de recursão do Python
     stack = [(x, y)]
@@ -167,25 +201,27 @@ def boundary_fill(x, y, fill_color, boundary_color):
             if current_color != boundary_color and current_color != fill_color:
                 set_pixel(px, py, fill_color)
                 
-                # Adiciona vizinhos (4-conectado)
+                # Adiciona vizinhos na pilha (4-conectado)
                 stack.append((px + 1, py))
                 stack.append((px - 1, py))
                 stack.append((px, py + 1))
                 stack.append((px, py - 1))
 
 
-# ============================
+
 # SCANLINE
-# ============================
+
 def scanline_fill(points, fill_color):
+    #verificando se é um polígono
     if len(points) < 3: return
 
-    # 1. Encontrar limites verticais
+    # 1. Encontrar limites verticais - todos os ys
     ys = [p[1] for p in points]
     min_y, max_y = int(min(ys)), int(max(ys))
 
     # 2. Iterar por cada linha horizontal
     for y in range(min_y, max_y + 1):
+        # Guarda todos os valores de X onde a scanline cruza as arestas
         intersections = []
         for i in range(len(points)):
             p1 = points[i]
@@ -194,7 +230,7 @@ def scanline_fill(points, fill_color):
             # Verifica se a scanline intercepta a aresta
             if (p1[1] <= y < p2[1]) or (p2[1] <= y < p1[1]):
                 # Cálculo de X da interseção (Interpolação)
-                x = p1[0] + (y - p1[1]) * (p2[0] - p1[0]) / (p2[1] - p1[1])
+                x = p1[0] + (y - p1[1]) * (p2[0] - p1[0]) / (p2[1] - p1[1]) #equação da reta
                 intersections.append(int(x))
         
         # 3. ORDENAR as interseções 
@@ -206,16 +242,21 @@ def scanline_fill(points, fill_color):
                 x_start = intersections[i]
                 x_end = intersections[i+1]
                 
-                # LAÇO DE TEXTURA: Em vez de draw_line, pintamos pixel a pixel
+                # LAÇO DE TEXTURA: Em vez de draw_line, pintamos pixel a pixel, cria um padrão tipo xadrez
                 for x in range(x_start, x_end + 1):
 
                     if (x // 1 + y // 1) % 2 == 0:
                         set_pixel(x, y, (0, 0, 255))    
                     else:
                         set_pixel(x, y, (0, 0, 180))
-# =============================
-#INTRO
-# ==============================
+
+
+
+# =====================================================
+# *Menus 
+# =====================================================
+
+# Intro
 def intro_logo():
     # Carrega e toca a música da INTRO
     pygame.mixer.music.load("Sounds/capcom.mp3") 
@@ -246,7 +287,7 @@ def draw_logo():
     rx = 180 
     ry = 100
     
-    # 1. Desenha apenas o contorno do círculo (NÃO use flood_fill no círculo)
+    # 1. Desenha apenas o contorno do círculo (NÃO usa flood_fill no círculo)
     draw_ellipse(cx, cy, rx, ry, WHITE)
     tempo_atual = pygame.time.get_ticks()
     
@@ -254,50 +295,98 @@ def draw_logo():
     if tempo_atual > 1000:
         # Pequena flutuação
         offset_y = int(math.sin(tempo_atual * 0.005) * 7)
-        desenhar_nave_detalhada(cx, cy + offset_y)
+        angle = pygame.time.get_ticks() * 0.05
+        desenhar_nave_detalhada(cx, cy + offset_y, angle)
 
-def desenhar_nave_detalhada(cx, cy):
-    # Cores para facilitar
-    # Se o flood_fill estiver dando erro, desenhe apenas as linhas primeiro
+
+def instructions():
+    scrolling_story()
+    while True:
+        screen.fill(BLACK)
+        # TÍTULO
+        draw_text("INSTRUÇÕES", fonte_titulo, WHITE, WIDTH//2, 80)
+
+        # TEXTO DAS INSTRUÇÕES
+        draw_text("Mover a nave:", fonte_instrucao, WHITE, WIDTH//2, 150)
+        draw_text("←  Setinha esquerda", fonte_instrucao, WHITE, WIDTH//2, 180)
+        draw_text("→  Setinha direita", fonte_instrucao, WHITE, WIDTH//2, 210)
+
+        draw_text("Atirar:", fonte_instrucao, WHITE, WIDTH//2, 260)
+        draw_text("Barra de espaço", fonte_instrucao, WHITE, WIDTH//2, 290)
+
+        draw_text("Pressione ENTER para continuar", fonte_instrucao, YELLOW, WIDTH//2, 360)
+
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    return
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        pygame.display.flip()
+
+def menu():
+    while True:
+        # ===== TÍTULO =====
+        
+        screen.fill(BLACK)
+        draw_text("Galactic Impact", fonte_titulo, WHITE, WIDTH//2, 100)
+        draw_text("Aperte qualquer tecla para iniciar", fonte_instrucao, WHITE, 320, 200)
+        draw_ship()
     
-    # --- CORPO CENTRAL (Trapézio/Triângulo) ---
-    draw_line(cx, cy - 50, cx + 20, cy + 30, WHITE)   # Lado direito
-    draw_line(cx, cy - 50, cx - 20, cy + 30, WHITE)   # Lado esquerdo
-    draw_line(cx - 20, cy + 30, cx + 20, cy + 30, WHITE) # Base do corpo
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                return
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+        pygame.display.flip()
 
-    # --- ASAS ---
-    # Asa Esquerda
-    draw_line(cx - 20, cy, cx - 50, cy + 40, WHITE)
-    draw_line(cx - 50, cy + 40, cx - 20, cy + 30, WHITE)
-    
-    # Asa Direita
-    draw_line(cx + 20, cy, cx + 50, cy + 40, WHITE)
-    draw_line(cx + 50, cy + 40, cx + 20, cy + 30, WHITE)
 
-    # --- COCKPIT (Cabine central) ---
-    draw_line(cx - 8, cy - 10, cx + 8, cy - 10, WHITE)
-    draw_line(cx - 8, cy + 10, cx + 8, cy + 10, WHITE)
-    draw_line(cx - 8, cy - 10, cx - 8, cy + 10, WHITE)
-    draw_line(cx + 8, cy - 10, cx + 8, cy + 10, WHITE)
-
-    # --- FOGO DO MOTOR (Vermelho/Amarelo) ---
-    if (pygame.time.get_ticks() // 200) % 2 == 0:
-        draw_line(cx - 10, cy + 30, cx, cy + 60, RED)
-        draw_line(cx + 10, cy + 30, cx, cy + 60, RED)
-
-    # --- PREENCHIMENTO OPCIONAL ---
-    # Só use se o desenho estiver 100% fechado. 
-    # Tente comentar essas linhas se o círculo continuar ficando todo branco.
-    # flood_fill(cx, cy + 20, BLACK, GRAY)    # Interior da nave
-    # flood_fill(cx, cy, BLACK, BLUE)         # Interior da cabine
 # =========================
 # ROTAÇÃO (TRANSFORMAÇÃO GEOMÉTRICA)
 # =========================
-def rotate(p, angle):
+def translation(tx, ty):
+    return [
+        [1, 0, tx],
+        [0, 1, ty],
+        [0, 0, 1]
+    ]
+
+def rotate(angle):
     rad = math.radians(angle)
-    x = p[0]*math.cos(rad) - p[1]*math.sin(rad)
-    y = p[0]*math.sin(rad) + p[1]*math.cos(rad)
-    return (int(x), int(y))
+    return [
+        [math.cos(rad), -math.sin(rad), 0],
+        [math.sin(rad),  math.cos(rad), 0],
+        [0, 0, 1]
+    ]
+
+
+def multiply_matrix(a, b):
+    resultado = [[0,0,0],[0,0,0],[0,0,0]]
+    
+    for i in range(3):
+        for j in range(3):
+            resultado[i][j] = (
+                a[i][0]*b[0][j] +
+                a[i][1]*b[1][j] +
+                a[i][2]*b[2][j]
+            )
+    
+    return resultado
+
+
+def new_position(p, m):
+    x, y = p
+    vetor = [x, y, 1]
+    #produto escalar (matriz x vetor)
+    x_final = m[0][0]*vetor[0] + m[0][1]*vetor[1] + m[0][2]*vetor[2]
+    y_final = m[1][0]*vetor[0] + m[1][1]*vetor[1] + m[1][2]*vetor[2]
+
+    return (int(x_final), int(y_final))
+
+
 
 def scrolling_story():
     story = [
@@ -331,12 +420,13 @@ def scrolling_story():
         screen.fill(BLACK)
 
         for i, line in enumerate(story):
+            #configura a linha e plota na tela
             text_surface = fonte_instrucao.render(line, True, YELLOW)
             text_rect = text_surface.get_rect(center=(WIDTH//2, y + i * 35))
             screen.blit(text_surface, text_rect)
 
         y -= speed  # translação vertical
-
+        #captura ação do jogador - se ele apertar em alguma tecla ou quiser sair
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
                 return  # pula a história
@@ -357,25 +447,88 @@ ship_pos = [VIEWPORT.centerx, VIEWPORT.bottom - 40]
 ship_angle = 0
 ship_model = [(-10,10),(0,-15),(10,10)]
 
+def desenhar_nave_detalhada(cx, cy, angle=0):
+
+    R = rotate(angle)
+
+    def T(p):
+        # Rotaciona e depois translada
+        x, y = new_position(p, R)
+        return (int(x + cx), int(y + cy))
+
+    # ===== Pontos locais da nave =====
+
+    # Corpo
+    p1 = (0, -50)
+    p2 = (20, 30)
+    p3 = (-20, 30)
+
+    # Asas
+    p4 = (-20, 0)
+    p5 = (-50, 40)
+
+    p6 = (20, 0)
+    p7 = (50, 40)
+
+    # Cockpit
+    c1 = (-8, -10)
+    c2 = (8, -10)
+    c3 = (-8, 10)
+    c4 = (8, 10)
+
+    # ===== Desenho =====
+
+    # Corpo
+    draw_line(*T(p1), *T(p2), WHITE)
+    draw_line(*T(p1), *T(p3), WHITE)
+    draw_line(*T(p3), *T(p2), WHITE)
+
+    # Asa esquerda
+    draw_line(*T(p4), *T(p5), WHITE)
+    draw_line(*T(p5), *T(p3), WHITE)
+
+    # Asa direita
+    draw_line(*T(p6), *T(p7), WHITE)
+    draw_line(*T(p7), *T(p2), WHITE)
+
+    # Cockpit
+    draw_line(*T(c1), *T(c2), WHITE)
+    draw_line(*T(c3), *T(c4), WHITE)
+    draw_line(*T(c1), *T(c3), WHITE)
+    draw_line(*T(c2), *T(c4), WHITE)
+
+    # Fogo
+    if (pygame.time.get_ticks() // 200) % 2 == 0:
+        draw_line(*T((-10, 30)), *T((0, 60)), RED)
+        draw_line(*T((10, 30)), *T((0, 60)), RED)
+
+
+
 def draw_ship():
     points = []
-    for p in ship_model:
-        # Rotaciona e move para a posição da nave
-        rp = rotate(p, ship_angle)
-        points.append((ship_pos[0] + rp[0], ship_pos[1] + rp[1]))
 
-    # O scanline agora verá 4 interseções em algumas linhas y e 2 em outras
-    # Isso fará o desenho "aberto" em cima
+    # cria matriz de translação
+    m_trans = translation(ship_pos[0], ship_pos[1])
+
+    for p in ship_model:
+        novo_p = new_position(p, m_trans)
+        points.append(novo_p)
+
+    #preenchimento
     scanline_fill(points, BLUE)
 
-    # Contorno branco para destacar
+    #borda
     for i in range(len(points)):
         p1 = points[i]
         p2 = points[(i + 1) % len(points)]
         draw_line(p1[0], p1[1], p2[0], p2[1], WHITE)
 
+
+
 ZOOM_VIEWPORT = pygame.Rect(480, 360, 120, 80)
 INSIDE, LEFT, RIGHT, BOTTOM, TOP = 0, 1, 2, 4, 8 # definicao da região
+
+#Ela serve para descobrir onde um ponto está em relação a um retângulo de recorte.
 def get_outcode(x, y, rect):
     code = INSIDE
     if x < rect.left:   code |= LEFT
@@ -384,6 +537,7 @@ def get_outcode(x, y, rect):
     elif y > rect.bottom: code |= BOTTOM
     return code
 
+# delimita a parte que será cortada desenhando as linhas cortadas
 def draw_line_clipped(x0, y0, x1, y1, rect, color):
     outcode0 = get_outcode(x0, y0, rect)
     outcode1 = get_outcode(x1, y1, rect)
@@ -397,6 +551,7 @@ def draw_line_clipped(x0, y0, x1, y1, rect, color):
         else:
             # Precisa de recorte
             outcode_out = outcode0 if outcode0 else outcode1
+            #em ambas as direções é utilizada a equação paramétrica da reta
             if outcode_out & TOP:
                 x = x0 + (x1 - x0) * (rect.top - y0) / (y1 - y0)
                 y = rect.top
@@ -409,11 +564,13 @@ def draw_line_clipped(x0, y0, x1, y1, rect, color):
             elif outcode_out & LEFT:
                 y = y0 + (y1 - y0) * (rect.left - x0) / (x1 - x0)
                 x = rect.left
-
+            #atualiza o ponto recortado
             if outcode_out == outcode0:
                 x0, y0, outcode0 = x, y, get_outcode(x, y, rect)
             else:
                 x1, y1, outcode1 = x, y, get_outcode(x, y, rect)
+
+# desenha a área do zoom
 def draw_zoom_system():
 
     # --- 1. LIMPEZA E OCLUSÃO ---
@@ -432,6 +589,7 @@ def draw_zoom_system():
         set_pixel(ZOOM_VIEWPORT.right, y, GRAY)
 
     # --- 3. MAPEAMENTO JANELA-VIEWPORT ---
+    # Define a janela do mundo que será ampliada
     window_size = 60 
     win_left = ship_pos[0] - window_size
     win_right = ship_pos[0] + window_size
@@ -454,8 +612,8 @@ def draw_zoom_system():
     zx_center, zy_center = map_coords(ship_pos[0], ship_pos[1])
     zoom_points = []
     for p in ship_model:
-        rp = rotate(p, ship_angle)
-        px, py = map_coords(ship_pos[0] + rp[0], ship_pos[1] + rp[1])
+        #rp = rotate(p, ship_angle)
+        px, py = map_coords(ship_pos[0] + p[0], ship_pos[1] + p[1])
         zoom_points.append((px, py))
     
     for i in range(len(zoom_points)):
@@ -473,10 +631,12 @@ def draw_zoom_system():
 shots = []
 
 def shoot():
+    # -15 é para o tiro nascer um pouco à frente da nave, e não exatamente no centro.
     shots.append({"x":ship_pos[0], "y":ship_pos[1]-15})
 
 def draw_shots():
     for s in shots:
+        # -8 é para fazer o tiro ser para cima
         draw_line(s["x"], s["y"], s["x"], s["y"]-8, YELLOW)
 
 # =========================
@@ -484,8 +644,10 @@ def draw_shots():
 # =========================
 asteroids = []
 
+#define os dados do asteroide(como ele tem que ser)
 def spawn_asteroid():
     return {
+        # faz com que o asteroide nasça em locais aleatorios, +20 e -20 faz com que ele não nasça cortado
         "x": random.randint(VIEWPORT.left+20, VIEWPORT.right-20),
         "y": VIEWPORT.top,
         "r": 15
@@ -498,17 +660,24 @@ def draw_asteroid(a):
 # =========================
 # COLISÕES
 # =========================
-def hit_asteroid(s, a):
-    return math.hypot(s["x"]-a["x"], s["y"]-a["y"]) < a["r"]
 
+# tiro e asteroide
+def hit_asteroid(s, a):
+    #verificação de colisão por meio de distância euclidiana entre seus centros entre tiro e asteroide
+    return math.hypot(s["x"]-a["x"], s["y"]-a["y"]) < a["r"]
+#nave e asteroide
 def hit_ship(a):
+    #verificação de colisão por meio de distância euclidiana entre seus centros, entre asteroide e nave
     return math.hypot(a["x"]-ship_pos[0], a["y"]-ship_pos[1]) < a["r"] + 12
 # ===========================
 # PONTUAÇÃO
+# ===========================
 score = 0
 
 def draw_score(current_score, x, y, size, color):
+    #converte o numero para string
     score_str = str(current_score)
+    #controle de deslocamento horizontal
     offset = 0
     for char in score_str:
         draw_digit(int(char), x + offset, y, size, color)
@@ -547,7 +716,7 @@ def draw_digit(digit, x, y, size, color):
             # Multiplica pelo tamanho e desenha com Bresenham (draw_line)
             draw_line(x + x0_rel * size, y + y0_rel * size, 
                       x + x1_rel * size, y + y1_rel * size, color)
-# ==========================
+
 # =========================
 # FIM DE JOGO
 # =========================
@@ -563,56 +732,7 @@ def game_over():
                 pygame.quit()
                 sys.exit()
 
-# =========================
-# Menu - instruções
-# =========================
-def instructions():
-    scrolling_story()
-    while True:
-        screen.fill(BLACK)
-        # TÍTULO
-        draw_text("INSTRUÇÕES", fonte_titulo, WHITE, WIDTH//2, 80)
 
-        # TEXTO DAS INSTRUÇÕES
-        draw_text("Mover a nave:", fonte_instrucao, WHITE, WIDTH//2, 150)
-        draw_text("←  Setinha esquerda", fonte_instrucao, WHITE, WIDTH//2, 180)
-        draw_text("→  Setinha direita", fonte_instrucao, WHITE, WIDTH//2, 210)
-
-        draw_text("Atirar:", fonte_instrucao, WHITE, WIDTH//2, 260)
-        draw_text("Barra de espaço", fonte_instrucao, WHITE, WIDTH//2, 290)
-
-        draw_text("Pressione ENTER para continuar", fonte_instrucao, YELLOW, WIDTH//2, 360)
-
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
-                    return
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-
-        pygame.display.flip()
-
-
-# =========================
-# MENU
-# =========================
-def menu():
-    while True:
-        # ===== TÍTULO =====
-        
-        screen.fill(BLACK)
-        draw_text("Galactic Impact", fonte_titulo, WHITE, WIDTH//2, 100)
-        draw_text("Aperte qualquer tecla para iniciar", fonte_instrucao, WHITE, 320, 200)
-        draw_ship()
-    
-        for event in pygame.event.get():
-            if event.type == pygame.KEYDOWN:
-                return
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-        pygame.display.flip()
 
 
 intro_logo()
