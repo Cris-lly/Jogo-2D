@@ -14,4 +14,4 @@ py asteroides.py
 Após a execução do comando, o jogo será iniciado automaticamente.
 
 ## Link do Vídeo da execução do programa
-▶️ Link: https://youtu.be/jxaw7aMig70 
+▶️ Link: https://youtu.be/CMcD9_aCOTQ
